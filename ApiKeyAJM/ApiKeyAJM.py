@@ -1,8 +1,9 @@
 """
 ApiKeyAJM.py
-reusable API key getter
+
+Provides a way to read/manage API keys.
 """
-from _version import __version__
+
 from logging import getLogger
 from pathlib import Path
 from typing import Optional, Union
@@ -46,7 +47,7 @@ class APIKeyBase:
         self.api_key_location = kwargs.get('api_key_location')
 
         if not self.api_key:
-            self._initialize_key_location()
+            self._ensure_key_location_is_set()
             self.api_key = self._fetch_api_key(self.api_key_location)
 
         self.logger.info(f"{self.__class__.__name__} Initialization complete.")
@@ -54,11 +55,13 @@ class APIKeyBase:
     def _initialize_logger(self, logger):
         self.logger = logger or getLogger(self.DEFAULT_LOGGER_NAME)
 
-    def _initialize_key_location(self):
+    def _ensure_key_location_is_set(self):
         if not self.api_key_location:
-            self.api_key_location = self.DEFAULT_KEY_LOCATION
-            if not self.api_key_location:
-                raise AttributeError('api_key_location not found, is DEFAULT_KEY_LOCATION set correctly?')
+            if not self.DEFAULT_KEY_LOCATION:
+                raise AttributeError('api_key_location or api_key were not passed in as kwargs and '
+                                     'DEFAULT_KEY_LOCATION not set, is it defined in the class?')
+            else:
+                self.api_key_location = self.DEFAULT_KEY_LOCATION
 
     @classmethod
     def get_api_key(cls, **kwargs):
