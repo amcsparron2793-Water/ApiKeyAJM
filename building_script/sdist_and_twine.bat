@@ -14,10 +14,10 @@ REM DONT FORGET TO UPDATE setup.py, push commit to remote, and create a new rele
 echo running sdist setup
 
 REM THIS IS THE COMMAND FOR PYTHON 3.10? and before.
-python setup.py sdist
+REM python setup.py sdist
 
 REM THIS IS THE COMMAND FOR PYTHON 3.12 and AFTER
-REM python -m build sdist
+python -m build sdist
 
 REM You can upload your distributions to TestPyPI using twine by specifying the --repository flag:
 REM twine upload --repository testpypi dist/*
