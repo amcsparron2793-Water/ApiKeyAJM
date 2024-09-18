@@ -6,9 +6,10 @@ from _version import __version__
 from logging import getLogger
 from pathlib import Path
 from typing import Optional, Union
+import requests
+import validators
 
-
-class APIKey:
+class APIKeyBase:
     """
     APIKey is a class that provides a way to read/manage API keys. It has the following methods:
     __init__(self, **kwargs):
@@ -85,3 +86,19 @@ class APIKey:
         except IOError as e:
             self.logger.error(e, exc_info=True)
             raise e
+
+
+class RemoteAPIKey(APIKeyBase):
+    def __init__(self, base_url: str, **kwargs):
+        super().__init__(**kwargs)
+        self._base_url = base_url
+
+    @property
+    def base_url(self):
+        if self._base_url:
+            if not validators.url(self._base_url):
+                raise validators.ValidationError("Invalid URL")
+        else:
+            self._base_url = None
+        return self._base_url
+
