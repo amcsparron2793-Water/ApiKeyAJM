@@ -92,16 +92,50 @@ class APIKeyBase:
 
 
 class RemoteAPIKey(APIKeyBase):
-    def __init__(self, base_url: str, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
         self._base_url = base_url
+        self._create_key_endpoint = create_key_endpoint
+        self._full_url = self._construct_full_url()
+
+        username = kwargs.get('username')
+        password = kwargs.get('password')
+
+        # Inline the logic of assigning api_key
+        self.api_key = None if not username or not password else self._fetch_api_key(username, password)
+
+        super().__init__(api_key=self.api_key or '0', **kwargs)
+
+    def _construct_full_url(self) -> str:
+        return f'{self.validated_base_url}/{self._create_key_endpoint}'
 
     @property
-    def base_url(self):
-        if self._base_url:
-            if not validators.url(self._base_url):
-                raise validators.ValidationError("Invalid URL")
+    def validated_base_url(self) -> str:
+        if self._base_url and not validators.url(self._base_url):
+            raise validators.ValidationError("Invalid URL")
+        return self._base_url or None
+
+    def _fetch_api_key(self, username: str, password: str) -> str:
+        response = requests.post(
+            url=self._full_url,
+            json={'username': username, 'password': password},
+            headers={'Content-Type': 'application/json'}
+        )
+        if response.ok:
+            return response.json()
         else:
-            self._base_url = None
-        return self._base_url
+            raise requests.exceptions.RequestException(response.text)
+
+    @classmethod
+    def get_api_key(cls, **kwargs):
+        if not kwargs.get('username') or not kwargs.get('password'):
+            raise AttributeError('username or password were not passed in as kwargs')
+        return cls(**kwargs).api_key['api_key']
+
+if __name__ == '__main__':
+    # username = 'andrew'
+    # password = '<PASSWORD>'
+
+    remote_api_key = RemoteAPIKey(base_url='http://127.0.0.1:5000', create_key_endpoint='get_api_key',
+        username='andrew',password='<PASSWORD>')
+    print(remote_api_key.api_key)
 
