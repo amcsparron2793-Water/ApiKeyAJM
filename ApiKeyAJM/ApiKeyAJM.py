@@ -42,13 +42,14 @@ class APIKeyBase:
     DEFAULT_LOGGER_NAME = 'dummy_logger'
 
     def __init__(self, **kwargs):
+        self._is_file_key = kwargs.get('is_file_key', True)
         self._initialize_logger(kwargs.get('logger'))
         self.api_key = kwargs.get('api_key')
         self.api_key_location = kwargs.get('api_key_location')
-
-        if not self.api_key:
-            self._ensure_key_location_is_set()
-            self.api_key = self._fetch_api_key(self.api_key_location)
+        if self._is_file_key:
+            if not self.api_key:
+                self._ensure_key_location_is_set()
+                self.api_key = self._fetch_api_key(self.api_key_location)
 
         self.logger.info(f"{self.__class__.__name__} Initialization complete.")
 
@@ -92,6 +93,7 @@ class APIKeyBase:
 
 
 class RemoteAPIKey(APIKeyBase):
+    IS_FILE_KEY = False
     def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
         self._base_url = base_url
         self._create_key_endpoint = create_key_endpoint
@@ -103,7 +105,8 @@ class RemoteAPIKey(APIKeyBase):
         # Inline the logic of assigning api_key
         self.api_key = None if not username or not password else self._fetch_api_key(username, password)
 
-        super().__init__(api_key=self.api_key or '0', **kwargs)
+        # super class needs a dummy api_key value
+        super().__init__(api_key=self.api_key, is_file_key=self.IS_FILE_KEY, **kwargs)
 
     def _construct_full_url(self) -> str:
         return f'{self.validated_base_url}/{self._create_key_endpoint}'
@@ -114,16 +117,20 @@ class RemoteAPIKey(APIKeyBase):
             raise validators.ValidationError("Invalid URL")
         return self._base_url or None
 
+    # noinspection PyMethodOverriding
     def _fetch_api_key(self, username: str, password: str) -> str:
-        response = requests.post(
-            url=self._full_url,
-            json={'username': username, 'password': password},
-            headers={'Content-Type': 'application/json'}
-        )
-        if response.ok:
-            return response.json()
-        else:
-            raise requests.exceptions.RequestException(response.text)
+        try:
+            response = requests.post(
+                url=self._full_url,
+                json={'username': username, 'password': password},
+                headers={'Content-Type': 'application/json'}
+            )
+            if response.ok:
+                return response.json()
+            else:
+                raise requests.exceptions.RequestException(response.text)
+        except requests.exceptions.ConnectionError as e:
+            raise requests.exceptions.ConnectionError(e) from None
 
     @classmethod
     def get_api_key(cls, **kwargs):
@@ -137,5 +144,5 @@ if __name__ == '__main__':
 
     remote_api_key = RemoteAPIKey(base_url='http://127.0.0.1:5000', create_key_endpoint='get_api_key',
         username='andrew',password='<PASSWORD>')
-    print(remote_api_key.api_key)
+    # print(remote_api_key.api_key)
 
