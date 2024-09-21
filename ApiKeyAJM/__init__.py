@@ -1,1 +1,1 @@
-from ApiKeyAJM.ApiKeyAJM import APIKeyBase, RemoteAPIKey
+from ApiKeyAJM.ApiKeyAJM import APIKeyFromFile, RemoteAPIKey

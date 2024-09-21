@@ -4,7 +4,6 @@ ApiKeyAJM.py
 Provides a way to read/manage API keys.
 """
 import json
-from ctypes import DEFAULT_MODE
 from logging import getLogger
 from pathlib import Path
 from typing import Optional, Union
@@ -12,7 +11,7 @@ import requests
 import validators
 
 
-class APIKeyBase:
+class _APIKeyBase:
     """
     APIKey is a class that provides a way to read/manage API keys. It has the following methods:
     __init__(self, **kwargs):
@@ -68,7 +67,7 @@ class APIKeyBase:
         raise NotImplementedError("this is meant to be implemented by a subclass")
 
 
-class APIKeyFromFile(APIKeyBase):
+class APIKeyFromFile(_APIKeyBase):
     VALID_FILE_MODES = ['text', 'json']
     DEFAULT_FILE_MODE = 'text'
     def __init__(self, **kwargs):
@@ -135,7 +134,7 @@ class APIKeyFromFile(APIKeyBase):
             raise e
 
 
-class RemoteAPIKey(APIKeyBase):
+class RemoteAPIKey(_APIKeyBase):
     JSON_CONTENT_TYPE = 'application/json'
 
     def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
