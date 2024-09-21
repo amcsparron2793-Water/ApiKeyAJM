@@ -10,6 +10,7 @@ from typing import Optional, Union
 import requests
 import validators
 
+
 class APIKeyBase:
     """
     APIKey is a class that provides a way to read/manage API keys. It has the following methods:
@@ -42,19 +43,37 @@ class APIKeyBase:
     DEFAULT_LOGGER_NAME = 'dummy_logger'
 
     def __init__(self, **kwargs):
-        self._is_file_key = kwargs.get('is_file_key', True)
+        # self._is_file_key = kwargs.get('is_file_key', True)
         self._initialize_logger(kwargs.get('logger'))
         self.api_key = kwargs.get('api_key')
-        self.api_key_location = kwargs.get('api_key_location')
-        if self._is_file_key:
-            if not self.api_key:
-                self._ensure_key_location_is_set()
-                self.api_key = self._fetch_api_key(self.api_key_location)
+
+        if not self.api_key:
+            self._prep_for_fetch()
+            self.api_key = self._fetch_api_key()
 
         self.logger.info(f"{self.__class__.__name__} Initialization complete.")
 
     def _initialize_logger(self, logger):
         self.logger = logger or getLogger(self.DEFAULT_LOGGER_NAME)
+
+    def _prep_for_fetch(self):
+        raise NotImplementedError("this is meant to be implemented by a subclass")
+
+    @classmethod
+    def get_api_key(cls, **kwargs):
+        return cls(**kwargs).api_key
+
+    def _fetch_api_key(self, **kwargs):
+        raise NotImplementedError("this is meant to be implemented by a subclass")
+
+
+class APIKeyFromFile(APIKeyBase):
+    def __init__(self, **kwargs):
+        self.api_key_location = kwargs.get('api_key_location')
+        super().__init__(**kwargs)
+
+    def _prep_for_fetch(self):
+        self._ensure_key_location_is_set()
 
     def _ensure_key_location_is_set(self):
         if not self.api_key_location:
@@ -63,10 +82,6 @@ class APIKeyBase:
                                      'DEFAULT_KEY_LOCATION not set, is it defined in the class?')
             else:
                 self.api_key_location = self.DEFAULT_KEY_LOCATION
-
-    @classmethod
-    def get_api_key(cls, **kwargs):
-        return cls(**kwargs).api_key
 
     def _key_file_not_found_error(self):
         try:
@@ -93,7 +108,6 @@ class APIKeyBase:
 
 
 class RemoteAPIKey(APIKeyBase):
-    IS_FILE_KEY = False
     def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
         self._base_url = base_url
         self._create_key_endpoint = create_key_endpoint
@@ -104,9 +118,10 @@ class RemoteAPIKey(APIKeyBase):
 
         # Inline the logic of assigning api_key
         self.api_key = None if not username or not password else self._fetch_api_key(username, password)
+        if isinstance(self.api_key, dict):
+            self.api_key = self.api_key.get('api_key')
 
-        # super class needs a dummy api_key value
-        super().__init__(api_key=self.api_key, is_file_key=self.IS_FILE_KEY, **kwargs)
+        super().__init__(api_key=self.api_key, **kwargs)
 
     def _construct_full_url(self) -> str:
         return f'{self.validated_base_url}/{self._create_key_endpoint}'
@@ -136,13 +151,16 @@ class RemoteAPIKey(APIKeyBase):
     def get_api_key(cls, **kwargs):
         if not kwargs.get('username') or not kwargs.get('password'):
             raise AttributeError('username or password were not passed in as kwargs')
-        return cls(**kwargs).api_key['api_key']
+        return cls(**kwargs).api_key
 
 if __name__ == '__main__':
     # username = 'andrew'
     # password = '<PASSWORD>'
-
-    remote_api_key = RemoteAPIKey(base_url='http://127.0.0.1:5000', create_key_endpoint='get_api_key',
-        username='andrew',password='<PASSWORD>')
-    # print(remote_api_key.api_key)
+    test_attrs = {'base_url': 'http://127.0.0.1:5000',
+                  'create_key_endpoint': 'get_api_key',
+                  'username': 'andrew',
+                  'password': '<PASSWORD>'}
+    remote_api_key = RemoteAPIKey(** test_attrs)#.get_api_key(** test_attrs)
+    #print(remote_api_key.api_key)
+    print(remote_api_key.api_key)
 
