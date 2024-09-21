@@ -3,7 +3,8 @@ ApiKeyAJM.py
 
 Provides a way to read/manage API keys.
 """
-
+import json
+from ctypes import DEFAULT_MODE
 from logging import getLogger
 from pathlib import Path
 from typing import Optional, Union
@@ -68,9 +69,30 @@ class APIKeyBase:
 
 
 class APIKeyFromFile(APIKeyBase):
+    VALID_FILE_MODES = ['text', 'json']
+    DEFAULT_FILE_MODE = 'text'
     def __init__(self, **kwargs):
-        self.api_key_location = kwargs.get('api_key_location')
+        self.api_key_location = Path(kwargs.get('api_key_location'))
+        if self.api_key_location.suffix == '.json':
+            self._file_mode = 'json'
+        elif self.api_key_location.suffix == '.txt':
+            self._file_mode = 'text'
+        else:
+            self.logger.warning(f'File extension for {self.api_key_location} is not .json or .txt. '
+                                f'Assuming {self.DEFAULT_FILE_MODE} file mode if file_mode not provided.')
+        self._file_mode = kwargs.get('file_mode', self.DEFAULT_FILE_MODE)
+        self._json_key = kwargs.get('json_key')
         super().__init__(**kwargs)
+
+    @property
+    def file_mode(self):
+        if self._file_mode and self._file_mode in self.VALID_FILE_MODES:
+            if (self._file_mode == 'json'
+                    and self.api_key_location.suffix.split('.')[-1] != self._file_mode):
+                self.logger.warning(f"File mode and file path suffix do not match, "
+                                    f"({self.api_key_location.suffix.split('.')[-1]} and {self._file_mode}) "
+                                    f"this could cause issues.")
+            return self._file_mode
 
     def _prep_for_fetch(self):
         self._ensure_key_location_is_set()
@@ -78,36 +100,44 @@ class APIKeyFromFile(APIKeyBase):
     def _ensure_key_location_is_set(self):
         if not self.api_key_location:
             if not self.DEFAULT_KEY_LOCATION:
-                raise AttributeError('api_key_location or api_key were not passed in as kwargs and '
-                                     'DEFAULT_KEY_LOCATION not set, is it defined in the class?')
+                raise AttributeError('api_key_location or api_key were not provided '
+                                     'and DEFAULT_KEY_LOCATION not set.')
             else:
                 self.api_key_location = self.DEFAULT_KEY_LOCATION
 
-    def _key_file_not_found_error(self):
+    def _raise_key_file_not_found_error(self):
         try:
             raise FileNotFoundError('key file not found')
         except FileNotFoundError as e:
             self.logger.error(e, exc_info=True)
             raise e
 
-    def _fetch_api_key(self, key_location: Optional[Union[Path, str]] = None):
+    def _fetch_api_key(self, key_location: Optional[Union[Path, str]] = None, **kwargs):
         if key_location and Path(key_location).is_file():
             key_path = key_location
         elif self.api_key_location and Path(self.api_key_location).is_file():
             key_path = self.api_key_location
         else:
-            self._key_file_not_found_error()
+            self._raise_key_file_not_found_error()
             return None
 
         try:
             with open(key_path, 'r') as f:
-                return f.read().strip()
+                if self.file_mode == 'text':
+                    return f.read().strip()
+                elif self.file_mode == 'json':
+                    if self._json_key:
+                        return json.load(f)[self._json_key]
+                    else:
+                        return json.load(f)
         except IOError as e:
             self.logger.error(e, exc_info=True)
             raise e
 
 
 class RemoteAPIKey(APIKeyBase):
+    JSON_CONTENT_TYPE = 'application/json'
+
     def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
         self._base_url = base_url
         self._create_key_endpoint = create_key_endpoint
@@ -138,7 +168,7 @@ class RemoteAPIKey(APIKeyBase):
             response = requests.post(
                 url=self._full_url,
                 json={'username': username, 'password': password},
-                headers={'Content-Type': 'application/json'}
+                headers={'Content-Type': self.JSON_CONTENT_TYPE}
             )
             if response.ok:
                 return response.json()
