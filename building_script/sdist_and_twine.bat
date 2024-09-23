@@ -17,7 +17,8 @@ REM THIS IS THE COMMAND FOR PYTHON 3.10? and before.
 REM python setup.py sdist
 
 REM THIS IS THE COMMAND FOR PYTHON 3.12 and AFTER
-python -m build sdist
+REM IF THIS DOESNT WORK try python -m build (without the dist)
+python -m build dist
 
 REM You can upload your distributions to TestPyPI using twine by specifying the --repository flag:
 REM twine upload --repository testpypi dist/*

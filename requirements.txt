@@ -1,5 +1,11 @@
+build==1.2.2
+certifi==2024.8.30
+charset-normalizer==3.3.2
+colorama==0.4.6
+idna==3.10
+packaging==24.1
+pyproject_hooks==1.1.0
+requests==2.32.3
 setuptools==75.1.0
-
-ApiKeyAJM~=0.1
-requests~=2.32.3
-validators~=0.34.0
+urllib3==2.2.3
+validators==0.34.0
