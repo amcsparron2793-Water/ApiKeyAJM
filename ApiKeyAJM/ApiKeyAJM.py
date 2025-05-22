@@ -39,7 +39,7 @@ class _BaseAPIKey:
         apiKey = APIKey(logger=myLogger, api_key_location='path/to/api_key.txt')
         key = apiKey.api_key
     """
-    DEFAULT_KEY_LOCATION = None
+    DEFAULT_KEY_LOCATION = './'
     DEFAULT_LOGGER_NAME = 'dummy_logger'
 
     def __init__(self, **kwargs):
@@ -60,7 +60,7 @@ class _BaseAPIKey:
         :param logger: (Optional) The logger object to be used for logging.
         :return: None
         """
-        self.logger = logger or getLogger(self.DEFAULT_LOGGER_NAME)
+        self.logger = logger or getLogger(_BaseAPIKey.DEFAULT_LOGGER_NAME)
 
     def _prep_for_fetch(self):
         """
@@ -129,21 +129,22 @@ class APIKeyFromFile(_BaseAPIKey):
     DEFAULT_FILE_MODE = 'text'
 
     def __init__(self, **kwargs):
-        self.api_key_location = Path(kwargs.get('api_key_location'))
+        self.api_key_location = kwargs.get('api_key_location')
+        self._file_mode = kwargs.get('file_mode', APIKeyFromFile.DEFAULT_FILE_MODE)
+        super().__init__(**kwargs)
+        self._ensure_key_location_is_set()
         if self.api_key_location.suffix == '.json':
             self._file_mode = 'json'
         elif self.api_key_location.suffix == '.txt':
             self._file_mode = 'text'
         else:
             self.logger.warning(f'File extension for {self.api_key_location} is not .json or .txt. '
-                                f'Assuming {self.DEFAULT_FILE_MODE} file mode if file_mode not provided.')
-        self._file_mode = kwargs.get('file_mode', self.DEFAULT_FILE_MODE)
+                                f'Assuming {APIKeyFromFile.DEFAULT_FILE_MODE} file mode if file_mode not provided.')
         self._json_key = kwargs.get('json_key')
-        super().__init__(**kwargs)
 
     @property
     def file_mode(self):
-        if self._file_mode and self._file_mode in self.VALID_FILE_MODES:
+        if self._file_mode and self._file_mode in APIKeyFromFile.VALID_FILE_MODES:
             if (self._file_mode == 'json'
                     and self.api_key_location.suffix.split('.')[-1] != self._file_mode):
                 self.logger.warning(f"File mode and file path suffix do not match, "
@@ -171,11 +172,13 @@ class APIKeyFromFile(_BaseAPIKey):
         This method is called internally to make sure that the API key location is set before making any API calls.
         """
         if not self.api_key_location:
-            if not self.DEFAULT_KEY_LOCATION:
+            if not APIKeyFromFile.DEFAULT_KEY_LOCATION:
                 raise AttributeError('api_key_location or api_key were not provided '
                                      'and DEFAULT_KEY_LOCATION not set.')
 
-            self.api_key_location = self.DEFAULT_KEY_LOCATION
+            self.api_key_location = APIKeyFromFile.DEFAULT_KEY_LOCATION
+        if not isinstance(self.api_key_location, Path):
+            self.api_key_location = Path(self.api_key_location)
 
     def _raise_key_file_not_found_error(self):
         """
@@ -343,7 +346,7 @@ class RemoteAPIKey(_BaseAPIKey):
             response = requests.post(
                 url=self._full_url,
                 json={'username': username, 'password': password},
-                headers={'Content-Type': self.JSON_CONTENT_TYPE}
+                headers={'Content-Type': RemoteAPIKey.JSON_CONTENT_TYPE}
             )
             if response.ok:
                 return response.json()
