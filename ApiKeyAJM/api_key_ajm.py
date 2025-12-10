@@ -3,8 +3,11 @@ api_key_ajm.py
 
 Provides a way to read/manage API keys.
 """
+
+from ApiKeyAJM.logger import APIKeyLogger
+
 import json
-from logging import getLogger
+from logging import Logger
 from pathlib import Path
 from typing import Optional, Union
 import requests
@@ -47,11 +50,19 @@ class _BaseAPIKey:
         self._initialize_logger(kwargs.get('logger'))
         self.api_key = kwargs.get('api_key')
 
-        if not self.api_key:
-            self._prep_for_fetch()
-            self.api_key = self._fetch_api_key()
+        if not kwargs.get('delay_fetch', False):
+            self.prep_and_fetch_api_key()
+        else:
+            self.logger.info("api_key fetch delayed")
 
         self.logger.info(f"{self.__class__.__name__} Initialization complete.")
+
+    def prep_and_fetch_api_key(self, **kwargs):
+        if not self.api_key:
+            self._prep_for_fetch()
+            self.api_key = self._fetch_api_key(**kwargs)
+            self.logger.info(f"API Key fetched successfully.")
+        return self.api_key
 
     def _initialize_logger(self, logger):
         """
@@ -60,7 +71,11 @@ class _BaseAPIKey:
         :param logger: (Optional) The logger object to be used for logging.
         :return: None
         """
-        self.logger = logger or getLogger(_BaseAPIKey.DEFAULT_LOGGER_NAME)
+        logger = logger or APIKeyLogger()
+        if isinstance(logger, Logger):
+            self.logger = logger
+        else:
+            self.logger = logger.logger
 
     def _prep_for_fetch(self):
         """
@@ -132,6 +147,7 @@ class APIKeyFromFile(_BaseAPIKey):
         self.api_key_location = kwargs.get('api_key_location')
         self._file_mode = kwargs.get('file_mode', APIKeyFromFile.DEFAULT_FILE_MODE)
         super().__init__(**kwargs)
+
         self._ensure_key_location_is_set()
         if self.api_key_location.suffix == '.json':
             self._file_mode = 'json'
@@ -180,6 +196,8 @@ class APIKeyFromFile(_BaseAPIKey):
         if not isinstance(self.api_key_location, Path):
             self.api_key_location = Path(self.api_key_location)
 
+        self.logger.info(f'Using {self.api_key_location} as API key location.')
+
     def _raise_key_file_not_found_error(self):
         """
         This method is a private method that is called when a key file is not found.
@@ -190,6 +208,26 @@ class APIKeyFromFile(_BaseAPIKey):
         except FileNotFoundError as e:
             self.logger.error(e, exc_info=True)
             raise e
+
+    def _read_from_keyfile(self, key_path: Path):
+        with open(key_path, 'r') as f:
+            if self.file_mode == 'text':
+                return f.read().strip()
+            elif self.file_mode == 'json':
+                if self._json_key:
+                    return json.load(f)[self._json_key]
+                return json.load(f)
+            return None
+
+    def _get_key_filepath(self, key_location: Optional[Union[Path, str]] = None):
+        if key_location and Path(key_location).is_file():
+            key_path = key_location
+        elif self.api_key_location and Path(self.api_key_location).is_file():
+            key_path = self.api_key_location
+        else:
+            self._raise_key_file_not_found_error()
+            return None
+        return key_path
 
     def _fetch_api_key(self, key_location: Optional[Union[Path, str]] = None, **kwargs):
         """
@@ -211,22 +249,12 @@ class APIKeyFromFile(_BaseAPIKey):
 
         Note:
         - This method is internally used by the class and should not be called directly."""
-        if key_location and Path(key_location).is_file():
-            key_path = key_location
-        elif self.api_key_location and Path(self.api_key_location).is_file():
-            key_path = self.api_key_location
-        else:
-            self._raise_key_file_not_found_error()
-            return None
+        key_path = self._get_key_filepath()
 
         try:
-            with open(key_path, 'r') as f:
-                if self.file_mode == 'text':
-                    return f.read().strip()
-                elif self.file_mode == 'json':
-                    if self._json_key:
-                        return json.load(f)[self._json_key]
-                    return json.load(f)
+            key = self._read_from_keyfile(key_path)
+            self.logger.info(f'Successfully read API key from {key_path}.')
+            return key
         except IOError as e:
             self.logger.error(e, exc_info=True)
             raise e
@@ -278,6 +306,7 @@ class RemoteAPIKey(_BaseAPIKey):
     JSON_CONTENT_TYPE = 'application/json'
 
     def __init__(self, base_url: str, create_key_endpoint: str, **kwargs):
+        super().__init__(**kwargs, delay_fetch=True)
         self._base_url = base_url
         self._create_key_endpoint = create_key_endpoint
         self._full_url = self._construct_full_url()
@@ -286,11 +315,16 @@ class RemoteAPIKey(_BaseAPIKey):
         password = kwargs.get('password')
 
         # Inline the logic of assigning api_key
-        self.api_key = None if not username or not password else self._fetch_api_key(username, password)
+        self.api_key = None if not username or not password else self.prep_and_fetch_api_key(username=username,
+                                                                                             password=password)
+        if not username or not password:
+            self.logger.warning("Credentials not provided. API Key not fetched. "
+                                "Run self.prep_and_fetch_api_key() with username and password kwargs to fetch")
         if isinstance(self.api_key, dict):
             self.api_key = self.api_key.get('api_key')
 
-        super().__init__(api_key=self.api_key, **kwargs)
+        if self.api_key is None:
+            self.logger.warning("No API Key fetched")
 
     def _construct_full_url(self) -> str:
         """
@@ -349,10 +383,16 @@ class RemoteAPIKey(_BaseAPIKey):
                 headers={'Content-Type': RemoteAPIKey.JSON_CONTENT_TYPE}
             )
             if response.ok:
+                self.logger.debug("API key request ok.")
                 return response.json()
+
             raise requests.exceptions.RequestException(response.text)
         except requests.exceptions.ConnectionError as e:
-            raise requests.exceptions.ConnectionError(e) from None
+            try:
+                raise requests.exceptions.ConnectionError(e) from None
+            except requests.exceptions.ConnectionError as e:
+                self.logger.error(e, exc_info=True)
+                exit(1)
 
     @classmethod
     def get_api_key(cls, **kwargs):
