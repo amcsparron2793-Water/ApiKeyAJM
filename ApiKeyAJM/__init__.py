@@ -7,6 +7,12 @@ class ApiKeyUncaughtHook(UncaughtExceptionHook):
         super()._log_exception(exc_type, exc_value, tb)
 
 
-ApiKeyUncaughtHook().set_sys_excepthook()
+def install_api_key_uncaught_hook() -> None:
+    ApiKeyUncaughtHook.set_sys_excepthook()
 
+
+from ApiKeyAJM.logger import APIKeyLogger
 from ApiKeyAJM.api_key_ajm import APIKeyFromFile, RemoteAPIKey
+
+__all__ = ['APIKeyLogger', 'APIKeyFromFile', 'RemoteAPIKey',
+           'ApiKeyUncaughtHook', 'install_api_key_uncaught_hook']
