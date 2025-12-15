@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from ApiKeyAJM.ApiKeyAJM import APIKeyFromFile
+from ApiKeyAJM import APIKeyFromFile
 
 
 class TestAPIKeyFromFile(unittest.TestCase):
