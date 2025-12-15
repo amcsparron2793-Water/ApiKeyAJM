@@ -7,5 +7,5 @@ packaging==25
 pyproject_hooks==1.1.0
 requests==2.32.3
 setuptools==75.1.0
-urllib3==2.2.3
+urllib3==2.6.0
 validators==0.34.0
