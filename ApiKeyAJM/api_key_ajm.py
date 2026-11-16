@@ -146,6 +146,7 @@ class APIKeyFromFile(_BaseAPIKey):
     def __init__(self, **kwargs):
         self.api_key_location = kwargs.get('api_key_location')
         self._file_mode = kwargs.get('file_mode', APIKeyFromFile.DEFAULT_FILE_MODE)
+        self._json_key = kwargs.get('json_key')
         super().__init__(**kwargs)
 
         self._ensure_key_location_is_set()
@@ -156,7 +157,6 @@ class APIKeyFromFile(_BaseAPIKey):
         else:
             self.logger.warning(f'File extension for {self.api_key_location} is not .json or .txt. '
                                 f'Assuming {APIKeyFromFile.DEFAULT_FILE_MODE} file mode if file_mode not provided.')
-        self._json_key = kwargs.get('json_key')
 
     @property
     def file_mode(self):
